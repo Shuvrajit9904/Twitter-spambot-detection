@@ -1,0 +1,190 @@
+import math
+import operator
+from collections import defaultdict
+import numpy as np
+from sklearn import tree
+import math
+
+def getFeatureDim(dataset):
+    mx = 0
+    linesplit1 = dataset.split('\n')
+    for line2 in linesplit1:
+        spacesplit2 = line2.split()
+        if spacesplit2 != []:
+            for i2 in range(1,len(spacesplit2)):
+                colonsplit2 = spacesplit2[i2].split(':')
+                ind = int(colonsplit2[0])                
+                if ind >= mx:
+                    mx = ind
+    return mx
+
+def libsvm2matrix(dataset, featuresize):    
+    newdataset = []
+    nwlinesplit = dataset.split('\n')    
+    for line1 in nwlinesplit:
+        spacesplit = line1.split()        
+        nwline1 = [0]*(featuresize+1)
+        if spacesplit != []:
+            nwline1[0] = spacesplit[0]
+            for i1 in range(1,len(spacesplit)):
+                colonsplit = spacesplit[i1].split(':')
+                ind = int(colonsplit[0])                
+                nwline1[ind] = float(colonsplit[-1])        
+            newdataset.append(nwline1)
+    return newdataset
+
+def ID3(data,attributes):    
+    #extracts the leftmost(outcome) column of dataset
+    outcome = [row3[0] for row3 in data]
+    #Checks if all the data row has same outcome
+    #Then return the only possible outcome            
+    if outcome.count(outcome[0]) == len(outcome):
+        return outcome[0]
+    #Checks if data has no attribute, return a default value
+    if len(data[0]) == 16:        
+        return majority(outcome)        
+    root = maxInfoGain(data,attributes)            
+    rootAttr = attributes[root-1]    
+    #create a new tree with the calculated root in each iteration
+    decisionTree = {rootAttr:{}}     
+    del(attributes[root-1])
+    attrValue = [ex[root] for ex in data]
+    uniqueVal = set(attrValue)
+    #Call ID3 with subset of the data
+    for val in uniqueVal:
+        subattr = attributes[:]
+        decisionTree[rootAttr][val] = ID3(split(data, root, val),subattr)
+    return decisionTree
+
+def maxInfoGain(data, attributes):    
+    #Entropy of Labels
+    entropybase = entropy(data)         
+    mx_InfoGain = 0
+    root = -1
+    #Calculate InfoGain for each attributes    
+    for attr in xrange(1, len(data[0])):        
+        #Get the column for a particular attribute
+        attrval = [val[attr] for val in data]        
+        #Find the distinct possible values of the attribute
+        distinct = list(set(attrval))
+        expectedEntropy = 0
+        for dst in distinct:
+            #Subset of data for a particular value of the attribute 'attr'
+            updatedataset = split(data, attr ,dst)
+            #probability of a particular value in the entire dataset
+            #Required to calculate Expected Entropy
+            prob1 = float(len(updatedataset))/float(len(data))
+            expectedEntropy += prob1*entropy(updatedataset)
+        #Information Gain(Attribute) = Base Entropy - Expected Entropy(Attribute)
+        InfoGain = entropybase - expectedEntropy        
+        if (InfoGain > mx_InfoGain):
+            mx_InfoGain = InfoGain
+            root = attr                         
+    return root
+
+#Calculate Entropy for a given dataset    
+def entropy(data):
+    #extracts the leftmost(outcome) column of dataset
+    outcome1 = [row5[0] for row5 in data]
+    #Find the distinct possible values of the outcomes
+    distinct = list(set(outcome1))
+    entropy = 0
+    for possib in distinct:
+        prob = float(outcome1.count(possib))/float(len(data))
+        entropy -= prob*math.log(prob,2)        
+    return entropy                                             
+                                                                                        
+
+#Split Data on required value of an atrribute
+def split(data, attribute, attributeval):
+    datasubset = []
+    for row4 in data:
+        #checks if a particular entry falls under the category of
+        #the required value of the specified attribute
+        #If so, append the subset of data,
+        #and delete the specified attribute
+        if row4[attribute] == attributeval:
+            row4 = row4.tolist()
+            restdata = row4[:attribute]
+            restdata.extend(row4[(attribute+1):])
+            #np.delete(row4,attribute)
+            #np.append(datasubset, row4)
+            datasubset.append(restdata)
+    return np.asarray(datasubset)
+
+def majority(classList):
+    classCount={}
+    for vote in classList:
+        if vote not in classCount.keys(): classCount[vote] = 0
+        classCount[vote] += 1
+    sortedClassCount = sorted(classCount.iteritems(), key=operator.itemgetter(1), reverse=True)
+    return sortedClassCount[0][0]
+     
+    
+
+def classify(tree, instance, default_class = 0):    
+    if not isinstance(tree, dict):
+        return tree
+    if not tree:
+        return default_class
+    attribute_index = tree.keys()[0]
+    #attribute_index = instance.index(attribute_inde)
+    attribute_values = tree.values()[0]
+    instance_attribute_value = instance[attribute_index]
+    if instance_attribute_value not in attribute_values:
+        return default_class
+    return classify(attribute_values[instance_attribute_value], instance, default_class)
+
+
+
+def toInt(data):
+    for row in range(len(data)):
+        for cell in range(1,len(data[row])):
+            data[row][cell] = math.floor(data[row][cell]) + 1
+    return data            
+
+ftrain = open('data-splits/data.train')
+dataset = ftrain.read()
+featuresize = getFeatureDim(dataset)
+t = libsvm2matrix(dataset,featuresize)
+l = len(t)/10
+train = np.array(t[:4*l])
+train = train.astype(np.float)
+train = toInt(train)
+dev = np.array(t[4*l:])
+dev = dev.astype(np.float)
+dev = toInt(dev)
+
+'''
+xTrain = train[:,1:]
+xDev = dev[:,1:]
+yTrain = train[:,0]
+yDev = dev[:,0]
+
+clf = tree.DecisionTreeClassifier()
+clf.fit(xTrain, yTrain)
+devaccr = clf.score(xDev,yDev)
+print "devaccr:", devaccr
+'''
+featureVector = [i for i in range(1,featuresize)]
+tree = ID3(train, featureVector)
+    
+testing_instances = dev
+right = 0
+for instance in dev:
+    predicted_label = classify(tree, instance)
+    actual_label = instance[0]            
+    if predicted_label == actual_label:        
+        right += 1    
+print "Test Accuracy:", 100*(float(right)/len(dev))
+
+right1 = 0
+for instance in train:
+    predicted_label = classify(tree, instance)
+    actual_label = instance[0]            
+    if predicted_label == actual_label:        
+        right1 += 1    
+print "Train Accuracy:", 100*(float(right1)/len(train))
+
+#print "Reference: https://machinelearningmastery.com/implement-decision-tree-algorithm-scratch-python/"
+
