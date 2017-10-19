@@ -1,0 +1,72 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Oct 11 18:06:23 2017
+
+@author: Shuvrajit
+"""
+from sklearn import linear_model
+
+def getFeatureDim(dataset):
+    mx = 0
+    linesplit1 = dataset.split('\n')
+    for line2 in linesplit1:
+        spacesplit2 = line2.split()
+        if spacesplit2 != []:
+            for i2 in range(1,len(spacesplit2)):
+                colonsplit2 = spacesplit2[i2].split(':')
+                ind = int(colonsplit2[0])                
+                if ind >= mx:
+                    mx = ind
+    return mx
+
+def libsvm2matrix(dataset, featuresize):    
+    newdataset = []
+    nwlinesplit = dataset.split('\n')    
+    for line1 in nwlinesplit:
+        spacesplit = line1.split()        
+        nwline1 = [0]*(featuresize+1)
+        if spacesplit != []:
+            nwline1[0] = spacesplit[0]
+            for i1 in range(1,len(spacesplit)):
+                colonsplit = spacesplit[i1].split(':')
+                ind = int(colonsplit[0])                
+                nwline1[ind] = float(colonsplit[-1])        
+            newdataset.append(nwline1)
+    return newdataset
+
+
+ftrain = open('data-splits/data.train')
+dataset = ftrain.read()
+featuresize = getFeatureDim(dataset)
+t = libsvm2matrix(dataset,featuresize)
+l = len(t)/10
+train = np.array(t[:4*l])
+train = train.astype(np.float)
+dev = np.array(t[4*l:])
+dev = dev.astype(np.float)
+xTrain = train[:,1:]
+xDev = dev[:,1:]
+yTrain = train[:,0]
+yDev = dev[:,0]
+
+#logistic regression
+clf = linear_model.LogisticRegression()
+clf.fit(xTrain,yTrain)
+devaccr = clf.score(xDev,yDev)
+print "devaccr:", devaccr
+
+ftest = open('data-splits/data.test')
+testdata = ftest.read()
+featuresize = getFeatureDim(testdata)
+test = libsvm2matrix(testdata,featuresize)
+test = np.array(test)
+test = test.astype(np.float)
+xTest = test[:,1:]
+yTest = test[:,0]
+clf.score(xTest,yTest)
+
+
+
+
+
+
