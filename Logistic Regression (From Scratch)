@@ -1,0 +1,247 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Oct 26 22:20:30 2017
+
+@author: Shuvrajit
+"""
+import numpy as np
+import math
+
+def getFeatureDim(dataset):
+    mx = 0
+    linesplit1 = dataset.split('\n')
+    for line2 in linesplit1:
+        spacesplit2 = line2.split()
+        if spacesplit2 != []:
+            for i2 in range(1,len(spacesplit2)):
+                colonsplit2 = spacesplit2[i2].split(':')
+                ind = int(colonsplit2[0])                
+                if ind >= mx:
+                    mx = ind
+    return mx
+
+def libsvm2matrix(dataset, featuresize):    
+    newdataset = []
+    nwlinesplit = dataset.split('\n')    
+    for line1 in nwlinesplit:
+        spacesplit = line1.split()        
+        nwline1 = [0]*(featuresize+1)
+        if spacesplit != []:
+            nwline1[0] = spacesplit[0]
+            for i1 in range(1,len(spacesplit)):
+                colonsplit = spacesplit[i1].split(':')
+                ind = int(colonsplit[0])                
+                nwline1[ind] = float(colonsplit[-1])        
+            newdataset.append(nwline1)
+    return newdataset
+
+def crossvalidation(k, hyperparamEta, featuresize, epoch, hyperparamMu):
+    fil = open('data-splits/data.train')
+    filetrain = fil.read()
+    data1 = libsvm2matrix(filetrain, featuresize)    
+    l = len(data1)/k
+    print l
+    data = []        
+    for i in range(k):
+        data.append(data1[i*l:(i+1)*l])
+    data = np.array(data)
+    data = data.astype(np.float)        
+    maxaccuracy = 0
+    out = []
+    for mu in hyperparamMu:
+        print "Cross Validation for mu = ",mu
+        for eta in hyperparamEta:
+            #print "Cross Validation for eta = ",eta
+            valaccuracy = []
+            for i3 in range(k):                                
+                test = data[i]
+                mask = np.ones(len(data), dtype = bool)
+                mask[i] = False
+                train = np.concatenate(data[mask])                                                
+                initialweight = [0.001]* featuresize
+                bias = 0.001
+                mxepacc = 0
+                for ep in range(epoch):
+                    np.random.shuffle(train)
+                    neweta = float(eta)/float(eta+ep)
+                    weight = gradientDescent(data, alpha, epoch)
+                    initialweight = weight[1:]                    
+                    acc = accuracyCalc(test, weight, featuresize)                    
+                    if acc >= mxepacc:
+                        mxepacc = acc
+                        optwt = weight                
+                acc = accuracyCalc(test, optwt, featuresize)                                
+                valaccuracy.append(acc)
+            avgacc = float(sum(valaccuracy))/float(len(valaccuracy))
+            accuracystd = np.std(valaccuracy)
+            print "For eta : {}, Average Accuracy = {}".format(eta, avgacc)            
+            if avgacc >= maxaccuracy:
+                maxaccuracy = avgacc
+                out = []
+                out.append(eta)
+                out.append(mu)
+        print '\n'
+    print "(a) The best Hyperparameter: Eta = {}, Mu = {}".format(out[0],out[-1])
+    print "(b) The cross validation accuracy for best hyperparameter: ", maxaccuracy
+    return out            
+
+def accuracyCalc(dataset,weight, featuresize):
+    correctcount = 0
+    total = 0                            
+    for line3 in dataset:
+        total += 1        
+        y = line3[0]
+        example = np.array(line3)                
+        y1 = logistic(example, weight)
+        y1 = round(y1)           
+        if y1 == y:            
+            correctcount += 1
+    accuracy = 100 * (float(correctcount)/float(total))    
+    return accuracy            
+
+def logistic(example, weights):
+    #bias = weights[0]
+    #weight = weights[1:]        
+    x = example[1:]    
+    #wx = np.inner(weight,x) + bias
+    wx = np.inner(weights,x)
+    try:
+        expo = math.exp(-wx)
+    except OverflowError:
+        expo = float('inf')
+    logit = 1.0 / (1.0 + expo)    
+    return logit
+
+def gradientDescent(data, alpha, epoch, weight):    
+    #weight = [0.0 for i in range(len(data[0]))]
+    for ep in range(epoch):  
+        np.random.shuffle(data)  
+        sm = 0
+        for row in data:            
+            wx = logistic(row, weight)
+            error = row[0] - wx                
+            sm += error ** 2
+            #weight[0] = weight[0] + alpha * error
+            for i in range(len(row)-1):
+                weight[i] = weight[i] + alpha * error * row[i + 1] * wx * (1 - wx)
+        #print "sm", sm
+    return weight
+
+def toInt(data):
+    for row in range(len(data)):
+        for cell in range(1,len(data[row])):
+            data[row][cell] = math.floor(data[row][cell]) + 1
+    return data            
+
+
+def normalize(dataset, featuredim):
+    for i in range(1,featuredim+1):        
+        feat = dataset[:,i]
+        mean = sum(feat[1:])/len(feat)
+        mx = max(feat)
+        mn = min(feat)
+        for j in range(len(feat)):
+            dataset[j,i] = float(dataset[j,i] - mean)/float(mx - mn)
+        #data = toInt(dataset)
+    return dataset
+
+def scale(dataset, featuredim):
+    for i in range(1,featuredim+1):        
+        feat = dataset[:,i]
+        mean = sum(feat[1:])/len(feat)
+        mx = max(feat)
+        mn = min(feat)
+        for j in range(len(feat)):
+            dataset[j,i] = float(dataset[j,i]-mn)/float(mx - mn)
+        #data = toInt(dataset)
+    return dataset
+
+def logtransform(dataset, featuredim):
+    for i in range(1,featuredim+1):        
+        feat = dataset[:,i]
+        #mean = sum(feat[1:])/len(feat)
+        #mx = max(feat)
+        #mn = min(feat)
+        for j in range(len(feat)):
+            if dataset[j,i] != 0:                  
+                dataset[j,i] = math.log(dataset[j,i])                    
+        #data = toInt(dataset)
+    return dataset
+
+#Driving Code
+ftrain = open('data-splits/data.train')
+dataset = ftrain.read()
+featuresize = getFeatureDim(dataset)
+t = libsvm2matrix(dataset,featuresize)
+l = len(t)/5
+train = np.array(t[:4*l])
+train = train.astype(np.float)
+#train = normalize(train, featuresize)
+#train = scale(train,featuresize)
+#train = logtransform(train,featuresize)
+dev = np.array(t[4*l:])
+dev = dev.astype(np.float)
+#dev = normalize(dev, featuresize)
+#dev = scale(dev, featuresize)
+#dev = logtransform(dev, featuresize)
+epoch = 50
+k = 5
+alpha = 0.000001
+#alpha = 0.001
+initialweight = [0.0 for i in range(featuresize)]
+
+#Checking on Dev data
+mxdevaccr = 0
+devaccuracy = []
+for ep in range(10):
+    np.random.shuffle(train)        
+    weight = gradientDescent(train, alpha, epoch, initialweight)
+    initialweight = weight
+    accuracy = accuracyCalc(dev, weight, featuresize)
+    devaccuracy.append(accuracy)
+    if accuracy > mxdevaccr:
+        mxdevaccr = accuracy
+        optweight = weight
+        epo = ep+1
+    print "Accuracy:", accuracy
+print " Best Dev Set accuracy:{} (for Epoch #{})".format(mxdevaccr, epo)
+print "     Dev Set accuracy for last Epoch {}".format(accuracy)
+
+ftest = open('data-splits/data.test')
+dataset = ftest.read()
+featuresize = getFeatureDim(dataset)
+t = libsvm2matrix(dataset,featuresize)
+test = np.array(t)
+test = test.astype(np.float)
+accuracy = accuracyCalc(test, optweight, featuresize)
+print "Test Accuracy:", accuracy
+
+outfile = 'predicted.csv'
+outopen = open(outfile, 'w')
+
+idfile = 'ID.csv'
+idopen = open(idfile, 'w')
+
+fevalid = open('data-splits/data.eval.id')
+evalid = fevalid.read()
+evalid = evalid.split('\n')
+
+for ids in evalid:
+    ids = str(ids)
+    idopen.write(ids)
+    idopen.write('\n')
+    
+
+feval = open('data-splits/data.eval.anon')
+dataset = feval.read()
+featuresize = getFeatureDim(dataset)
+t = libsvm2matrix(dataset,featuresize)
+evl = np.array(t)
+evl = evl.astype(np.float)
+for item in evl:
+    y = str(round(logistic(item, optweight)))
+    outopen.write(y)
+    outopen.write('\n')
+    
+outopen.close()
+idopen.close()
